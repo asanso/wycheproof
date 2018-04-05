@@ -1,3 +1,7 @@
+"""Add test targets for Bouncy Castle using a local jar.
+
+"""
+
 _bouncycastle_jar_rule = """
 java_import(
     name = "bouncycastle_jar",

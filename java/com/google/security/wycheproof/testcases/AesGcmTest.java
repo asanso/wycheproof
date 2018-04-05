@@ -1,6 +1,4 @@
 /**
- * @license
- * Copyright 2016 Google Inc. All rights reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,17 +11,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.google.security.wycheproof;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.fail;
 
 import com.google.security.wycheproof.WycheproofRunner.ExcludedTest;
+import com.google.security.wycheproof.WycheproofRunner.NoPresubmitTest;
 import com.google.security.wycheproof.WycheproofRunner.ProviderType;
 import com.google.security.wycheproof.WycheproofRunner.SlowTest;
 import java.nio.ByteBuffer;
 import java.security.AlgorithmParameterGenerator;
 import java.security.AlgorithmParameters;
+import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -36,6 +38,8 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 // TODO(bleichen):
 //   - For EAX I was able to derive some special cases by inverting OMAC.
@@ -45,6 +49,7 @@ import org.junit.Test;
  *
  * <p>Other tests using AES-GCM are: CipherInputStreamTest.java CipherOuputStreamTest.java
  */
+@RunWith(JUnit4.class)
 public class AesGcmTest {
 
   /** Test vectors */
@@ -152,16 +157,14 @@ public class AesGcmTest {
   };
 
   /**
-   * Returns the GCM test vectors supported by the current provider.
-   * This is necessary since not every provider supports all parameters sizes.
-   * For example SUNJCE does not support 8 byte tags and Conscrypt only supports
-   * 12 byte nonces.
-   * Such restrictions are often made because AES-GCM is a relatively weak algorithm and
-   * especially small parameter sizes can lead to easy attacks.
+   * Returns the GCM test vectors supported by the current provider. This is necessary since not
+   * every provider supports all parameters sizes. For example SUNJCE does not support 8 byte tags
+   * and Conscrypt only supports 12 byte nonces. Such restrictions are often made because AES-GCM is
+   * a relatively weak algorithm and especially small parameter sizes can lead to easy attacks.
    * Avoiding such small parameter sizes should not be seen as a bug in the library.
    *
-   * <p>The only assumption we make here is that all test vectors with 128 bit tags and nonces
-   * with at least 96 bits are supported.
+   * <p>The only assumption we make here is that all test vectors with 128 bit tags and nonces with
+   * at least 96 bits are supported.
    */
   private Iterable<GcmTestVector> getTestVectors() throws Exception {
     ArrayList<GcmTestVector> supported = new ArrayList<GcmTestVector>();
@@ -190,6 +193,81 @@ public class AesGcmTest {
       cipher.updateAAD(test.aad);
       byte[] ct = cipher.doFinal(test.pt);
       assertEquals(test.ctHex, TestUtil.bytesToHex(ct));
+    }
+  }
+
+  /** Test encryption when update and doFinal are done with empty byte arrays. */
+  @Test
+  public void testEncryptWithEmptyArrays() throws Exception {
+    for (GcmTestVector test : getTestVectors()) {
+      // Encryption
+      byte[] empty = new byte[0];
+      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      cipher.init(Cipher.ENCRYPT_MODE, test.key, test.parameters);
+      int outputSize = cipher.getOutputSize(test.pt.length);
+      ByteBuffer ctBuffer = ByteBuffer.allocate(outputSize);
+      cipher.updateAAD(empty);
+      cipher.updateAAD(test.aad);
+      byte[] res = cipher.update(empty);
+      if (res != null) {
+        ctBuffer.put(res);
+      }
+      res = cipher.update(test.pt);
+      if (res != null) {
+        ctBuffer.put(res);
+      }
+      res = cipher.doFinal(empty);
+      if (res != null) {
+        ctBuffer.put(res);
+      }
+      assertEquals(test.ctHex, TestUtil.byteBufferToHex(ctBuffer));
+    }
+  }
+
+  @Test
+  public void testDecryptWithEmptyArrays() throws Exception {
+    for (GcmTestVector test : getTestVectors()) {
+      byte[] empty = new byte[0];
+      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      cipher.init(Cipher.DECRYPT_MODE, test.key, test.parameters);
+      int outputSize = cipher.getOutputSize(test.ct.length);
+      ByteBuffer ptBuffer = ByteBuffer.allocate(outputSize);
+      cipher.updateAAD(empty);
+      cipher.updateAAD(test.aad);
+      byte[] res = cipher.update(empty);
+      if (res != null) {
+        ptBuffer.put(res);
+      }
+      res = cipher.update(test.ct);
+      if (res != null) {
+        ptBuffer.put(res);
+      }
+      res = cipher.doFinal(empty);
+      if (res != null) {
+        ptBuffer.put(res);
+      }
+      assertEquals(test.ptHex, TestUtil.byteBufferToHex(ptBuffer));
+
+      // Simple test that a modified ciphertext fails.
+      ptBuffer.clear();
+      cipher.init(Cipher.DECRYPT_MODE, test.key, test.parameters);
+      cipher.updateAAD(empty);
+      cipher.updateAAD(test.aad);
+      cipher.updateAAD(new byte[1]);
+      res = cipher.update(empty);
+      if (res != null) {
+        ptBuffer.put(res);
+      }
+      res = cipher.update(test.ct);
+      if (res != null) {
+        ptBuffer.put(res);
+      }
+      try {
+        cipher.doFinal(empty);
+        fail("Accepted modified ciphertext.");
+      } catch (GeneralSecurityException ex) {
+        // Expected
+      }
     }
   }
 
@@ -224,11 +302,11 @@ public class AesGcmTest {
 
   /**
    * JCE has a dangerous feature: after a doFinal the cipher is typically reinitialized using the
-   * previous IV. This "feature" can easily break AES-GCM usages, because encrypting twice with
-   * the same key and IV leaks the authentication key. Hence any reasonable implementation of
-   * AES-GCM should not allow this. The expected behaviour of OpenJDK can be derived from the tests
-   * in jdk/test/com/sun/crypto/provider/Cipher/AES/TestGCMKeyAndIvCheck.java.
-   * OpenJDK does not allow two consecutive initializations for encryption with the same key and IV.
+   * previous IV. This "feature" can easily break AES-GCM usages, because encrypting twice with the
+   * same key and IV leaks the authentication key. Hence any reasonable implementation of AES-GCM
+   * should not allow this. The expected behaviour of OpenJDK can be derived from the tests in
+   * jdk/test/com/sun/crypto/provider/Cipher/AES/TestGCMKeyAndIvCheck.java. OpenJDK does not allow
+   * two consecutive initializations for encryption with the same key and IV.
    *
    * <p>The test here is weaker than the restrictions in OpenJDK. The only requirement here is that
    * reusing a Cipher without an explicit init() is caught.
@@ -255,6 +333,26 @@ public class AesGcmTest {
       } catch (java.lang.IllegalStateException ex) {
         // This is expected.
       }
+    }
+  }
+
+  /**
+   * Checks whether the implementation requires larger ByteBuffers than necessary. This test has
+   * been added mostly for debugging. E.g., conscrypt failed during decryption with ByteBuffers
+   * simply because the necessary outputSize was computed incorrectly.
+   */
+  @Test
+  public void testByteBufferSize() throws Exception {
+    for (GcmTestVector test : getTestVectors()) {
+      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      // Encryption
+      cipher.init(Cipher.ENCRYPT_MODE, test.key, test.parameters);
+      int outputSize = cipher.getOutputSize(test.pt.length);
+      assertEquals("plaintext size:" + test.pt.length, test.ct.length, outputSize);
+      // Decryption
+      cipher.init(Cipher.DECRYPT_MODE, test.key, test.parameters);
+      outputSize = cipher.getOutputSize(test.ct.length);
+      assertEquals("ciphertext size:" + test.ct.length, test.pt.length, outputSize);
     }
   }
 
@@ -320,7 +418,7 @@ public class AesGcmTest {
       // try with doFinal directly as well as with update followed by doFinal
       for (int useUpdate = 0; useUpdate <= 1; useUpdate++) {
         SecretKeySpec key = new SecretKeySpec(new byte[16], "AES");
-        GCMParameterSpec parameters = new GCMParameterSpec(128, new byte[16]);
+        GCMParameterSpec parameters = new GCMParameterSpec(128, new byte[12]);
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE, key, parameters);
 
@@ -337,10 +435,14 @@ public class AesGcmTest {
         try {
           int ctLength = 0;
           if (useUpdate > 0) {
-            ctLength += cipher.update(inBuf, inputOffsetInBuffer, ptVector.length, outBuf, outputOffsetInBuffer);
+            ctLength +=
+                cipher.update(
+                    inBuf, inputOffsetInBuffer, ptVector.length, outBuf, outputOffsetInBuffer);
             ctLength += cipher.doFinal(inBuf, 0, 0, outBuf, outputOffsetInBuffer + ctLength);
           } else {
-            ctLength += cipher.doFinal(inBuf, inputOffsetInBuffer, ptVector.length, outBuf, outputOffsetInBuffer);
+            ctLength +=
+                cipher.doFinal(
+                    inBuf, inputOffsetInBuffer, ptVector.length, outBuf, outputOffsetInBuffer);
           }
 
           System.arraycopy(outBuf, outputOffsetInBuffer, inBuf, inputOffsetInBuffer, ctLength);
@@ -350,17 +452,23 @@ public class AesGcmTest {
 
           int resultPtLength = 0;
           if (useUpdate > 0) {
-            resultPtLength += cipher.update(inBuf, inputOffsetInBuffer, ctLength, outBuf, outputOffsetInBuffer);
-            resultPtLength += cipher.doFinal(inBuf, 0, 0, outBuf, outputOffsetInBuffer + resultPtLength);
+            resultPtLength +=
+                cipher.update(inBuf, inputOffsetInBuffer, ctLength, outBuf, outputOffsetInBuffer);
+            resultPtLength +=
+                cipher.doFinal(inBuf, 0, 0, outBuf, outputOffsetInBuffer + resultPtLength);
           } else {
-            resultPtLength += cipher.doFinal(inBuf, inputOffsetInBuffer, ctLength, outBuf, outputOffsetInBuffer);
+            resultPtLength +=
+                cipher.doFinal(inBuf, inputOffsetInBuffer, ctLength, outBuf, outputOffsetInBuffer);
           }
 
           assertEquals(resultPtLength, ptVector.length);
-          assertArrayEquals(ptVector,
-                            Arrays.copyOfRange(outBuf, outputOffsetInBuffer, outputOffsetInBuffer + resultPtLength));
+          assertArrayEquals(
+              ptVector,
+              Arrays.copyOfRange(
+                  outBuf, outputOffsetInBuffer, outputOffsetInBuffer + resultPtLength));
         } catch (Throwable t) {
-          throw new AssertionError("testLargeByteBufferAlias failed with outputOffset=" + outputOffset, t);
+          throw new AssertionError(
+              "testLargeByteBufferAlias failed with outputOffset=" + outputOffset, t);
         }
       }
     }
@@ -370,9 +478,9 @@ public class AesGcmTest {
    * Encryption with ByteBuffers should be copy-safe even if the buffers have different starting
    * offsets and/or do not make the backing array visible.
    *
-   * Note that bugs in this often require a sizeable input to reproduce; the default implementation
-   * of engineUpdate(ByteBuffer, ByteBuffer) copies through 4KB bounce buffers, so we need to use
-   * something larger to see any problems - 8KB is what we use here.
+   * <p>Note that bugs in this often require a sizeable input to reproduce; the default
+   * implementation of engineUpdate(ByteBuffer, ByteBuffer) copies through 4KB bounce buffers, so we
+   * need to use something larger to see any problems - 8KB is what we use here.
    *
    * @see https://bugs.openjdk.java.net/browse/JDK-8181386
    */
@@ -385,7 +493,7 @@ public class AesGcmTest {
       for (int outputOffset = -1; outputOffset <= 1; outputOffset++) {
 
         SecretKeySpec key = new SecretKeySpec(new byte[16], "AES");
-        GCMParameterSpec parameters = new GCMParameterSpec(128, new byte[16]);
+        GCMParameterSpec parameters = new GCMParameterSpec(128, new byte[12]);
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE, key, parameters);
 
@@ -401,42 +509,45 @@ public class AesGcmTest {
         int bufferSize = sliceLength + Math.max(inputOffsetInBuffer, outputOffsetInBuffer);
         switch (i) {
           case 0:
-          case 1: {
-            byte[] buffer = new byte[bufferSize];
-            // It's important to slice() here as otherwise later when we flip() position will be
-            // reset to 0.
-            output = ByteBuffer.wrap(buffer, outputOffsetInBuffer, sliceLength).slice();
-            input = ByteBuffer.wrap(buffer, inputOffsetInBuffer, sliceLength).slice();
+          case 1:
+            {
+              byte[] buffer = new byte[bufferSize];
+              // It's important to slice() here as otherwise later when we flip() position will be
+              // reset to 0.
+              output = ByteBuffer.wrap(buffer, outputOffsetInBuffer, sliceLength).slice();
+              input = ByteBuffer.wrap(buffer, inputOffsetInBuffer, sliceLength).slice();
 
-            if (i == 1) {
-              mode = "array backed buffers with RO buffer";
-              inputRO = input.asReadOnlyBuffer();
-            } else {
-              mode = "array backed buffers";
-              inputRO = input.duplicate();
+              if (i == 1) {
+                mode = "array backed buffers with RO buffer";
+                inputRO = input.asReadOnlyBuffer();
+              } else {
+                mode = "array backed buffers";
+                inputRO = input.duplicate();
+              }
+
+              break;
             }
+          case 2:
+            {
+              mode = "direct buffers";
+              ByteBuffer buf = ByteBuffer.allocateDirect(bufferSize);
+              output = buf.duplicate();
+              output.position(outputOffsetInBuffer);
+              output.limit(sliceLength + outputOffsetInBuffer);
+              output = output.slice();
 
-            break;
-          }
-          case 2: {
-            mode = "direct buffers";
-            ByteBuffer buf = ByteBuffer.allocateDirect(bufferSize);
-            output = buf.duplicate();
-            output.position(outputOffsetInBuffer);
-            output.limit(sliceLength + outputOffsetInBuffer);
-            output = output.slice();
+              input = buf.duplicate();
+              input.position(inputOffsetInBuffer);
+              input.limit(sliceLength + inputOffsetInBuffer);
+              input = input.slice();
 
-            input = buf.duplicate();
-            input.position(inputOffsetInBuffer);
-            input.limit(sliceLength + inputOffsetInBuffer);
-            input = input.slice();
-
-            inputRO = input.duplicate();
-            break;
-          }
-          default: {
-            throw new AssertionError("Unknown test index " + i);
-          }
+              inputRO = input.duplicate();
+              break;
+            }
+          default:
+            {
+              throw new AssertionError("Unknown test index " + i);
+            }
         }
 
         // Now that we have our overlapping 'input' and 'output' buffers, we can write our plaintext
@@ -448,7 +559,6 @@ public class AesGcmTest {
         inputRO.limit(input.limit());
 
         try {
-
           int ctSize = cipher.doFinal(inputRO, output);
 
           // Now flip the buffers around and undo everything
@@ -470,12 +580,15 @@ public class AesGcmTest {
           output.flip();
           assertEquals(ByteBuffer.wrap(ptVector), output);
         } catch (Throwable t) {
-          throw new AssertionError("Overlapping buffers test failed with buffer type: "
-                                           + mode + " and output offset " + outputOffset, t);
+          throw new AssertionError(
+              "Overlapping buffers test failed with buffer type: "
+                  + mode
+                  + " and output offset "
+                  + outputOffset,
+              t);
         }
       }
     }
-
   }
 
   @Test
@@ -570,6 +683,63 @@ public class AesGcmTest {
   }
 
   /**
+   * Test encryption when update and doFinal are done with empty ByteBuffers. Conscrypt ignored
+   * calls to doFinal() when the ByteBuffer was empty.
+   */
+  @Test
+  public void testEncryptWithEmptyByteBuffer() throws Exception {
+    for (GcmTestVector test : getTestVectors()) {
+      // Encryption
+      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      ByteBuffer empty = ByteBuffer.allocate(0);
+      ByteBuffer ptBuffer = ByteBuffer.wrap(test.pt);
+      cipher.init(Cipher.ENCRYPT_MODE, test.key, test.parameters);
+      int outputSize = cipher.getOutputSize(test.pt.length);
+      ByteBuffer ctBuffer = ByteBuffer.allocate(outputSize);
+      cipher.updateAAD(empty);
+      cipher.updateAAD(test.aad);
+      cipher.update(empty, ctBuffer);
+      cipher.update(ptBuffer, ctBuffer);
+      cipher.doFinal(empty, ctBuffer);
+      assertEquals(test.ctHex, TestUtil.byteBufferToHex(ctBuffer));
+    }
+  }
+
+  @Test
+  public void testDecryptWithEmptyBuffer() throws Exception {
+    for (GcmTestVector test : getTestVectors()) {
+      Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+      ByteBuffer empty = ByteBuffer.allocate(0);
+      ByteBuffer ctBuffer = ByteBuffer.wrap(test.ct);
+      cipher.init(Cipher.DECRYPT_MODE, test.key, test.parameters);
+      int outputSize = cipher.getOutputSize(test.ct.length);
+      ByteBuffer ptBuffer = ByteBuffer.allocate(outputSize);
+      cipher.updateAAD(empty);
+      cipher.updateAAD(test.aad);
+      cipher.update(empty, ptBuffer);
+      cipher.update(ctBuffer, ptBuffer);
+      cipher.doFinal(empty, ptBuffer);
+      assertEquals(test.ptHex, TestUtil.byteBufferToHex(ptBuffer));
+
+      // Simple test that a modified ciphertext fails.
+      ctBuffer.flip();
+      ptBuffer.clear();
+      cipher.init(Cipher.DECRYPT_MODE, test.key, test.parameters);
+      cipher.updateAAD(empty);
+      cipher.updateAAD(test.aad);
+      cipher.updateAAD(new byte[1]);
+      cipher.update(empty, ptBuffer);
+      cipher.update(ctBuffer, ptBuffer);
+      try {
+        cipher.doFinal(empty, ptBuffer);
+        fail("Accepted modified ciphertext.");
+      } catch (GeneralSecurityException ex) {
+        // Expected
+      }
+    }
+  }
+
+  /**
    * The default authentication tag size should be 128-bit by default for the following reasons:
    * <br>
    * (1) Security: Ferguson, N., Authentication Weaknesses in GCM, Natl. Inst. Stand. Technol. [Web
@@ -658,12 +828,18 @@ public class AesGcmTest {
    *
    * <p>The test is slow as we have to encrypt 2^32 blocks.
    */
-  // TODO(quannguyen): Is there a faster way to test it?
   @ExcludedTest(
-    providers = {ProviderType.CONSCRYPT},
-    comment = "Conscrypt doesn't support streaming, would crash")
+    providers = {ProviderType.CONSCRYPT, ProviderType.BOUNCY_CASTLE, ProviderType.SPONGY_CASTLE},
+    comment = "Conscrypt doesn't support streaming, would crash. BouncyCastle needs > 1h."
+  )
   @SlowTest(
-    providers = {ProviderType.BOUNCY_CASTLE, ProviderType.SPONGY_CASTLE, ProviderType.OPENJDK})
+    providers = {
+      ProviderType.BOUNCY_CASTLE,
+      ProviderType.CONSCRYPT,
+      ProviderType.OPENJDK,
+      ProviderType.SPONGY_CASTLE
+    }
+  )
   @Test
   public void testWrappedAroundCounter() throws Exception {
     try {

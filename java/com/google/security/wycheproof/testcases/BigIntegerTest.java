@@ -1,6 +1,4 @@
 /**
- * @license
- * Copyright 2016 Google Inc. All rights reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,19 +11,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.google.security.wycheproof;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.fail;
 
 import java.math.BigInteger;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Test BigInteger class.
  *
  * <p>This unit tests focuses on checking security relevant properties.
  */
+@RunWith(JUnit4.class)
 public class BigIntegerTest {
   public static final BigInteger[] NONPRIMES =
       new BigInteger[] {

@@ -1,6 +1,4 @@
 /**
- * @license
- * Copyright 2016 Google Inc. All rights reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,11 +11,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.google.security.wycheproof;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import com.google.security.wycheproof.WycheproofRunner.NoPresubmitTest;
+import com.google.security.wycheproof.WycheproofRunner.ProviderType;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.KeyPair;
@@ -32,6 +33,8 @@ import java.util.Arrays;
 import java.util.HashSet;
 import javax.crypto.Cipher;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Testing ECIES.
@@ -50,6 +53,7 @@ import org.junit.Test;
 // - compressed points,
 // - maybe again CipherInputStream, CipherOutputStream,
 // - BouncyCastle has a KeyPairGenerator for ECIES. Is this one different from EC?
+@RunWith(JUnit4.class)
 public class EciesTest {
 
   int expectedCiphertextLength(String algorithm, int coordinateSize, int messageLength)
@@ -103,8 +107,8 @@ public class EciesTest {
         new String[] {
           "ECIESWITHAES/CBC/PKCS5PADDING",
           "ECIESWITHAES/CBC/PKCS7PADDING",
-          "ECIESWITHAES/DHAES/NOPADDING",
-          "ECIESWITHDESEDE/DHAES/NOPADDING",
+          /* MOE:insert "ECIESWITHAES/DHAES/NOPADDING", */
+          /* MOE:insert "ECIESWITHDESEDE/DHAES/NOPADDING", */
           "ECIESWITHAES/ECB/NOPADDING",
           "ECIESWITHAES/CTR/NOPADDING",
         };
@@ -126,8 +130,7 @@ public class EciesTest {
   public void testValidNames() throws Exception {
     String[] validNames =
         new String[] {
-          "ECIES/DHAES/PKCS7PADDING",
-          "ECIESWITHAES-CBC/NONE/NOPADDING",
+          "ECIES/DHAES/PKCS7PADDING", "ECIESWITHAES-CBC/NONE/NOPADDING",
         };
     for (String algorithm : validNames) {
       Cipher.getInstance(algorithm);
@@ -144,18 +147,19 @@ public class EciesTest {
     KeyPairGenerator kf = KeyPairGenerator.getInstance("ECIES");
     kf.initialize(ecSpec);
     KeyPair keyPair = kf.generateKeyPair();
-    ECPrivateKey priv = (ECPrivateKey) keyPair.getPrivate();
-    ECPublicKey pub = (ECPublicKey) keyPair.getPublic();
+    ECPrivateKey unusedPriv = (ECPrivateKey) keyPair.getPrivate();
+    ECPublicKey unusedPub = (ECPublicKey) keyPair.getPublic();
   }
 
   /**
-   * Tries to decrypt ciphertexts where the symmetric part has been randomized.
-   * If this randomization leads to distinguishable exceptions then this may indicate that the
+   * Tries to decrypt ciphertexts where the symmetric part has been randomized. If this
+   * randomization leads to distinguishable exceptions then this may indicate that the
    * implementation is vulnerable to a padding attack.
    *
-   * Problems detected:
+   * <p>Problems detected:
+   *
    * <ul>
-   * <li> CVE-2016-1000345 BouncyCastle before v.1.56 is vulnerable to a padding oracle attack.
+   *   <li>CVE-2016-1000345 BouncyCastle before v.1.56 is vulnerable to a padding oracle attack.
    * </ul>
    */
   @SuppressWarnings("InsecureCryptoUsage")
@@ -204,6 +208,10 @@ public class EciesTest {
   public void testEciesCorruptDefault() throws Exception {
     testExceptions("ECIES");
   }
+  @Test
+  public void testEciesCorruptAesCbc() throws Exception {
+    testExceptions("ECIESWithAES-CBC");
+  }
 
   @SuppressWarnings("InsecureCryptoUsage")
   @Test
@@ -226,9 +234,17 @@ public class EciesTest {
     } catch (GeneralSecurityException ex) {
       // This is as expected
       // Bouncy Castle 1.56 throws this exception
+      // MOE:begin_strip
+      // strip this catch from open source release,
+      // until third_party/java/bouncycastle is upgraded to 1.56 or later.
+    } catch (java.lang.IllegalArgumentException ex) {
+      // This is what BouncyCastle < 1.56 throws when the points are not on the curve.
+      // Maybe GeneralSecurityException would be better.
+      // MOE:end_strip
     } catch (Exception ex) {
-      fail("Expected subclass of java.security.GeneralSecurityException, but got: "
-        + ex.getClass().getName());
+      fail(
+          "Expected subclass of java.security.GeneralSecurityException, but got: "
+              + ex.getClass().getName());
     }
   }
 
@@ -266,6 +282,17 @@ public class EciesTest {
     testNotEcb("ECIES");
   }
 
+  /** BouncyCastle v1.52 uses ECB as default for ECIES with AES. */
+  @Test
+  public void testDefaultEciesWithAes() throws Exception {
+    testNotEcb("ECIESWithAES");
+  }
+  /** BouncyCastle v1.52 uses ECB as default for ECIES with DESede. */
+  @Test
+  public void testDefaultEciesWithDESede() throws Exception {
+    testNotEcb("ECIESwithDESede");
+  }
+
   /**
    * Tests whether algorithmA is an alias of algorithmB by encrypting with algorithmA and decrypting
    * with algorithmB.
@@ -294,7 +321,7 @@ public class EciesTest {
     byte[] message = "Hello".getBytes("UTF-8");
     eciesA.init(Cipher.ENCRYPT_MODE, keyPair.getPublic());
     byte[] ciphertext = eciesA.doFinal(message);
-    eciesB.init(Cipher.DECRYPT_MODE, keyPair.getPrivate(), eciesA.getParameters());
+    eciesB.init(Cipher.DECRYPT_MODE, keyPair.getPrivate(), eciesB.getParameters());
     byte[] decrypted = eciesB.doFinal(ciphertext);
     assertEquals(TestUtil.bytesToHex(message), TestUtil.bytesToHex(decrypted));
   }
@@ -311,35 +338,66 @@ public class EciesTest {
   }
 
   /**
+   * Encryption with ByteBuffers. This currently fails with BouncyCastle. Possibly this is the same
+   * bug as http://www.bouncycastle.org/jira/browse/BJA-577 and should be fixed in version 1.53.
+   */
+  @Test
+  public void testByteBuffer() throws Exception {
+    ECGenParameterSpec ecSpec = new ECGenParameterSpec("secp256r1");
+    // TODO(bleichen): Not sure what is better here:
+    //   BouncyCastle allows EC and ECIES. So far I can't see a difference.
+    //   In both cases the test is broken.
+    KeyPairGenerator kf = KeyPairGenerator.getInstance("ECIES");
+    kf.initialize(ecSpec);
+    KeyPair keyPair = kf.generateKeyPair();
+    PrivateKey priv = keyPair.getPrivate();
+    PublicKey pub = keyPair.getPublic();
+    byte[] message = "Hello".getBytes("UTF-8");
+
+    // Encryption
+    Cipher cipher = Cipher.getInstance("ECIESwithAES-CBC");
+    cipher.init(Cipher.ENCRYPT_MODE, pub);
+    ByteBuffer ptBuffer = ByteBuffer.wrap(message);
+    ByteBuffer ctBuffer = ByteBuffer.allocate(1024);
+    cipher.doFinal(ptBuffer, ctBuffer);
+
+    // Decryption
+    ctBuffer.flip();
+    ByteBuffer decrypted = ByteBuffer.allocate(message.length);
+    cipher.init(Cipher.DECRYPT_MODE, priv);
+    cipher.doFinal(ctBuffer, decrypted);
+    assertEquals(TestUtil.bytesToHex(message), TestUtil.bytesToHex(decrypted.array()));
+  }
+
+  /**
    * Cipher.doFinal(ByteBuffer, ByteBuffer) should be copy-safe according to
    * https://docs.oracle.com/javase/7/docs/api/javax/crypto/Cipher.html
    *
    * <p>This test tries to verify this.
    */
-  /* TODO(bleichen): There's no point to run this test as long as the previous basic test fails.
-   public void testByteBufferAlias() throws Exception {
-     byte[] message = "Hello".getBytes("UTF-8");
-     String algorithm = "ECIESWithAES-CBC";
-     ECGenParameterSpec ecSpec = new ECGenParameterSpec("secp256r1");
-     KeyPairGenerator kf = KeyPairGenerator.getInstance("EC");
-     kf.initialize(ecSpec);
-     KeyPair keyPair = kf.generateKeyPair();
-     Cipher ecies = Cipher.getInstance(algorithm);
+  @Test
+  public void testByteBufferAlias() throws Exception {
+    byte[] message = "Hello".getBytes("UTF-8");
+    String algorithm = "ECIESWithAES-CBC";
+    ECGenParameterSpec ecSpec = new ECGenParameterSpec("secp256r1");
+    KeyPairGenerator kf = KeyPairGenerator.getInstance("EC");
+    kf.initialize(ecSpec);
+    KeyPair keyPair = kf.generateKeyPair();
+    Cipher ecies = Cipher.getInstance(algorithm);
 
-     int ciphertextLength = expectedCiphertextLength(algorithm, 32, message.length);
-     byte[] backingArray = new byte[ciphertextLength];
-     ByteBuffer ptBuffer = ByteBuffer.wrap(backingArray);
-     ptBuffer.put(message);
-     ptBuffer.flip();
+    int ciphertextLength = expectedCiphertextLength(algorithm, 32, message.length);
+    byte[] backingArray = new byte[ciphertextLength];
+    ByteBuffer ptBuffer = ByteBuffer.wrap(backingArray);
+    ptBuffer.put(message);
+    ptBuffer.flip();
 
-     ecies.init(Cipher.ENCRYPT_MODE, keyPair.getPublic());
-     ByteBuffer ctBuffer = ByteBuffer.wrap(backingArray);
-     ecies.doFinal(ptBuffer, ctBuffer);
-     ctBuffer.flip();
+    ecies.init(Cipher.ENCRYPT_MODE, keyPair.getPublic());
+    ByteBuffer ctBuffer = ByteBuffer.wrap(backingArray);
+    ecies.doFinal(ptBuffer, ctBuffer);
+    ctBuffer.flip();
 
-     ecies.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
-     byte[] decrypted = ecies.doFinal(backingArray, 0, ctBuffer.remaining());
-     assertEquals(TestUtil.bytesToHex(message), TestUtil.bytesToHex(decrypted));
-   }
-  */
+    ecies.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
+    byte[] decrypted = ecies.doFinal(backingArray, 0, ctBuffer.remaining());
+    assertEquals(TestUtil.bytesToHex(message), TestUtil.bytesToHex(decrypted));
+  }
 }

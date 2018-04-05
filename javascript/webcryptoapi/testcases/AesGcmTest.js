@@ -17,6 +17,12 @@
 /**
  * Tests for AES-GCM implementations of Web Crypto API.
  */
+
+/**
+ * TODO(thanhb):
+ * - Tests invalid parameters
+ */
+
 goog.provide('wycheproof.webcryptoapi.AES-GCM');
 goog.require('goog.testing.TestCase');
 goog.require('goog.testing.asserts');

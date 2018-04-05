@@ -1,6 +1,4 @@
 /**
- * @license
- * Copyright 2016 Google Inc. All rights reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,11 +11,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.google.security.wycheproof;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import com.google.security.wycheproof.WycheproofRunner.NoPresubmitTest;
+import com.google.security.wycheproof.WycheproofRunner.ProviderType;
 import java.math.BigInteger;
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -28,6 +30,8 @@ import java.security.interfaces.RSAPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Tests RSA keys. Signatures and encryption are tested in different tests.
@@ -46,21 +50,21 @@ import org.junit.Test;
 //    some libraries compute d mod lambda(n)
 //    paramaters p,q,... are not really required
 // - checks for bad random number generation
+@RunWith(JUnit4.class)
 public class RsaKeyTest {
 
   public static final String ENCODED_PUBLIC_KEY =
-    "30819f300d06092a864886f70d010101050003818d0030818902818100ab9014"
-        + "dc47d44b6d260fc1fef9ab022042fd9566e9d7b60c54100cb6e1d4edc9859046"
-        + "7d0502c17fce69d00ac5efb40b2cb167d8a44ab93d73c4d0f109fb5a26c2f882"
-        + "3236ff517cf84412e173679cfae42e043b6fec81f9d984b562517e6febe1f722"
-        + "95dbc3fdfc19d3240aa75515563f31dad83563f3a315acf9a0b351a23f020301"
-        + "0001";
+      "30819f300d06092a864886f70d010101050003818d0030818902818100ab9014"
+          + "dc47d44b6d260fc1fef9ab022042fd9566e9d7b60c54100cb6e1d4edc9859046"
+          + "7d0502c17fce69d00ac5efb40b2cb167d8a44ab93d73c4d0f109fb5a26c2f882"
+          + "3236ff517cf84412e173679cfae42e043b6fec81f9d984b562517e6febe1f722"
+          + "95dbc3fdfc19d3240aa75515563f31dad83563f3a315acf9a0b351a23f020301"
+          + "0001";
 
   /**
-   * Encodings of the public key from ENCODED_PUBLIC_KEY with modifications.
-   * This list so far has just a simple purpose: it is used to check whether parsing the key
-   * leads to some unexpected exceptions. I.e. it should not be possible to crash an
-   * application with an modified public key.
+   * Encodings of the public key from ENCODED_PUBLIC_KEY with modifications. This list so far has
+   * just a simple purpose: it is used to check whether parsing the key leads to some unexpected
+   * exceptions. I.e. it should not be possible to crash an application with an modified public key.
    */
   public static final String[] MODIFIED_PUBLIC_KEY = {
     // length contains leading 0
@@ -1394,98 +1398,10 @@ public class RsaKeyTest {
         + "ffff",
   };
 
-  private void checkPrivateCrtKey(RSAPrivateCrtKey key, int expectedKeySize) throws Exception {
-    BigInteger p = key.getPrimeP();
-    BigInteger q = key.getPrimeQ();
-    BigInteger n = key.getModulus();
-    BigInteger e = key.getPublicExponent();
-    BigInteger d = key.getPrivateExponent();
-    BigInteger dp = key.getPrimeExponentP();
-    BigInteger dq = key.getPrimeExponentQ();
-    BigInteger crtCoeff = key.getCrtCoefficient();
-
-    // Simple test that (n,d,e) is a valid RSA key.
-    assertEquals(n, p.multiply(q));
-    assertEquals(expectedKeySize, n.bitLength());
-    int certainty = 80;
-    assertTrue(p.isProbablePrime(certainty));
-    assertTrue(q.isProbablePrime(certainty));
-    // Very simple checks for weak random number generators.
-    RandomUtil.checkPrime(p);
-    RandomUtil.checkPrime(q);
-    assertTrue(d.bitLength() > expectedKeySize / 2);
-    // TODO(bleichen): Keys that are very imbalanced can be broken with elliptic curve factoring.
-    //   Add other checks. E.g. for the size of dp and dq
-    assertTrue(p.bitLength() > 256);
-    assertTrue(q.bitLength() > 256);
-    BigInteger p1 = p.subtract(BigInteger.ONE);
-    BigInteger q1 = q.subtract(BigInteger.ONE);
-    BigInteger phi = p1.multiply(q1);
-    BigInteger order = phi.divide(p1.gcd(q1)); // maximal order of elements
-    assertEquals(BigInteger.ONE, d.multiply(e).mod(order));
-    assertEquals(d.mod(p1), dp.mod(p1));
-    assertEquals(d.mod(q1), dq.mod(q1));
-    assertEquals(q.multiply(crtCoeff).mod(p), BigInteger.ONE);
-  }
-
-  private void checkPublicKey(RSAPublicKey pub, RSAPrivateKey priv) {
-    assertEquals(pub.getModulus(), priv.getModulus());
-    BigInteger e = pub.getPublicExponent();
-    // Checks that e > 1. [CVE-1999-1444]
-    assertEquals(1, e.compareTo(BigInteger.ONE));
-  }
-
-  private void checkKeyPair(KeyPair keypair, int keySizeInBits) throws Exception {
-    RSAPublicKey pub = (RSAPublicKey) keypair.getPublic();
-    RSAPrivateKey priv = (RSAPrivateKey) keypair.getPrivate();
-    if (priv instanceof RSAPrivateCrtKey) {
-      checkPrivateCrtKey((RSAPrivateCrtKey) priv, keySizeInBits);
-    } else {
-      // Using a CRT key leads to 6-7 times better performance than not using the CRT.
-      // Such a perfomance loss makes a library almost useless. Thus we consider this
-      // a bug.
-      fail("Expecting an RSAPrivateCrtKey instead of " + priv.getClass().getName());
-    }
-    checkPublicKey(pub, priv);
-  }
-
-  public void testKeyGenerationSize(int keySizeInBits) throws Exception {
-    KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-    keyGen.initialize(keySizeInBits);
-    KeyPair keypair = keyGen.genKeyPair();
-    checkKeyPair(keypair, keySizeInBits);
-  }
-
-  @Test
-  public void testKeyGeneration() throws Exception {
-    testKeyGenerationSize(1024);
-    testKeyGenerationSize(2048);
-  }
-
   /**
-   * Checks whether decoding and again encoding an RSA public key results
-   * in the same encoding.
-   * This is a regression test. Failing this test implies that the encoding has changed.
-   * Such a failure does not need to be a bug, since several encoding for the same key are
-   * possible.
-   */
-  @Test
-  public void testEncodeDecodePublic() throws Exception {
-    KeyFactory kf = KeyFactory.getInstance("RSA");
-    byte[] encoded = TestUtil.hexToBytes(ENCODED_PUBLIC_KEY);
-    X509EncodedKeySpec spec = new X509EncodedKeySpec(encoded);
-    RSAPublicKey pub = (RSAPublicKey) kf.generatePublic(spec);
-    assertEquals("The test assumes that the public key is in X.509 format",
-                 "X.509", pub.getFormat());
-    assertEquals(ENCODED_PUBLIC_KEY, TestUtil.bytesToHex(pub.getEncoded()));
-  }
-
-  /**
-   * Parses a list of modified encodings of an RSA public key.
-   * Expects that any modification either results in an InvalidKeySpecException
-   * or an altered PublicKey.
-   * This test has mostly "defense in depth" characteristic, since applications should
-   * never accept unauthenticated public keys.
+   * Parses a list of modified encodings of an RSA public key. Expects that any modification either
+   * results in an InvalidKeySpecException or an altered PublicKey. This test has mostly "defense in
+   * depth" characteristic, since applications should never accept unauthenticated public keys.
    */
   @Test
   public void testModifiedPublicKeyDecoding() throws Exception {
@@ -1513,6 +1429,232 @@ public class RsaKeyTest {
     assertEquals(0, cnt);
   }
 
-  // TODO(bleichen): This test is only needed as long as there are open issues.
+  private void checkPrivateCrtKey(RSAPrivateCrtKey key, int expectedKeySize) throws Exception {
+    BigInteger p = key.getPrimeP();
+    BigInteger q = key.getPrimeQ();
+    BigInteger n = key.getModulus();
+    BigInteger e = key.getPublicExponent();
+    BigInteger d = key.getPrivateExponent();
+    BigInteger dp = key.getPrimeExponentP();
+    BigInteger dq = key.getPrimeExponentQ();
+    BigInteger crtCoeff = key.getCrtCoefficient();
 
+    // Simple test that (n,d,e) is a valid RSA key.
+    assertEquals(n, p.multiply(q));
+    assertEquals(expectedKeySize, n.bitLength());
+    int certainty = 80;
+    assertTrue(p.isProbablePrime(certainty));
+    assertTrue(q.isProbablePrime(certainty));
+    // Very simple checks for weak random number generators.
+    RandomUtil.checkPrime(p);
+    RandomUtil.checkPrime(q);
+    // TODO(bleichen): Keys that are very imbalanced can be broken with elliptic curve factoring.
+    //   Add other checks. E.g. for the size of dp and dq
+    assertTrue(p.bitLength() > 256);
+    assertTrue(q.bitLength() > 256);
+    BigInteger p1 = p.subtract(BigInteger.ONE);
+    BigInteger q1 = q.subtract(BigInteger.ONE);
+    BigInteger phi = p1.multiply(q1);
+    BigInteger order = phi.divide(p1.gcd(q1)); // maximal order of elements
+    // A short d may indicate that public and private exponent have been switched
+    // or that the key generation fixed d and then computed e.
+    assertTrue(d.bitLength() > expectedKeySize / 2);
+    // RFC 3447 Section 3.2 specifies that d is a positive integer smaller than n
+    // satisfying e*d == 1 (mod lcm(p-1, q-1)).
+    assertEquals(1, d.compareTo(BigInteger.ONE));
+    assertEquals(-1, d.compareTo(n));
+    assertEquals(BigInteger.ONE, d.multiply(e).mod(order));
+    assertEquals(d.mod(p1), dp.mod(p1));
+    assertEquals(d.mod(q1), dq.mod(q1));
+    assertEquals(q.multiply(crtCoeff).mod(p), BigInteger.ONE);
+  }
+
+  private void checkPublicKey(RSAPublicKey pub) {
+    BigInteger e = pub.getPublicExponent();
+    BigInteger n = pub.getModulus();
+    // Checks that e > 1. [CVE-1999-1444]
+    assertEquals(1, e.compareTo(BigInteger.ONE));
+    // TODO(bleichen): Try to generalize and test private keys once the paper is available.
+    // Test for CVE-2017-15361. Public keys generated by the broken generator can be identified
+    // heuristically by testing if n is equivalent to a power of 65537 modulo the following primes:
+    int[] primes = {11, 13, 17, 19, 37, 53, 61, 71, 73, 79, 97, 103, 107, 109, 127, 151, 157};
+    boolean hasPattern = true;
+    for (int prime : primes) {
+      int residue = n.mod(BigInteger.valueOf(prime)).intValue();
+      int exp = 1;
+      do {
+        exp = exp * 65537 % prime;
+      } while (exp != 1 && exp != residue);
+      if (exp != residue) {
+        hasPattern = false;
+        break;
+      }
+    }
+    assertFalse("Public key has pattern from CVE-2017-15361. n = " + n.toString(), hasPattern);
+  }
+
+  private void checkKeyPair(KeyPair keypair, int keySizeInBits) throws Exception {
+    RSAPublicKey pub = (RSAPublicKey) keypair.getPublic();
+    RSAPrivateKey priv = (RSAPrivateKey) keypair.getPrivate();
+    if (priv instanceof RSAPrivateCrtKey) {
+      checkPrivateCrtKey((RSAPrivateCrtKey) priv, keySizeInBits);
+    } else {
+      // Using a CRT key leads to 6-7 times better performance than not using the CRT.
+      // Such a perfomance loss makes a library almost useless. Thus we consider this
+      // a bug.
+      fail("Expecting an RSAPrivateCrtKey instead of " + priv.getClass().getName());
+    }
+    checkPublicKey(pub);
+    assertEquals(pub.getModulus(), priv.getModulus());
+  }
+
+  /**
+   * Checks the default key size used for RSA key generation.
+   *
+   * <p>This test fails if the default key size for RSA is below the minimum recommendation of NIST
+   * SP 800-57 part1 revision 4, Table 2, page 53 in
+   * http://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r4.pdf . NIST recommends
+   * a minimal security strength of 112 bits for keys used until 2030. This translates to a minimal
+   * key size of 2048 bits.
+   *
+   * <p>Enisa, Algorithms, key size and parameters report – 2014, Section 3.6
+   * https://www.enisa.europa.eu/publications/algorithms-key-size-and-parameters-report-2014 Enisa,
+   * also suggests that 2048-bit RSA keys provide a security strength of about 112 bits. However,
+   * the recommendation for near term systems is more conservative than NIST. Enisa recommends a
+   * minimal key size of 3072 bits.
+   *
+   * <p>ECRYPT II Yearly Report on Algorithms and Keysizes (2011-2012), Section 13.3
+   * http://www.ecrypt.eu.org/ecrypt2/documents/D.SPA.20.pdf Suggests at least 2432 bits for new
+   * keys and at least 1024 bits for legacy keys.
+   *
+   * <p>All the references above clearly state that keys smaller than 2048 bits should only be used
+   * in legacy cases. Therefore, it seems wrong to use a default key size smaller than 2048 bits. If
+   * a user really wants a small RSA key then such a choice should be made by explicitly providing
+   * the desired key length during the initalization of the KeyPairGenerator.
+   *
+   * <p>According to https://docs.oracle.com/javase/7/docs/api/javax/crypto/Cipher.html every
+   * implementation of the Java platform is required to implement RSA with both 1024 and 2048 bit
+   * key sizes. Hence a 2048 bit default should not lead to compatibility problems.
+   */
+  @Test
+  public void testDefaultKeySize() throws Exception {
+    KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+    KeyPair keypair = keyGen.genKeyPair();
+    RSAPublicKey pub = (RSAPublicKey) keypair.getPublic();
+    int keySizeInBits = pub.getModulus().bitLength();
+    System.out.println("testDefaultSize: keysize=" + keySizeInBits);
+    checkKeyPair(keypair, keySizeInBits);
+    if (keySizeInBits < 2048) {
+      fail("RSA default key size too small:" + keySizeInBits);
+    }
+  }
+
+  private void testKeyGenerationSize(int keySizeInBits) throws Exception {
+    KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+    keyGen.initialize(keySizeInBits);
+    KeyPair keypair = keyGen.genKeyPair();
+    checkKeyPair(keypair, keySizeInBits);
+  }
+
+  @Test
+  public void testKeyGeneration() throws Exception {
+    testKeyGenerationSize(1024);
+    testKeyGenerationSize(2048);
+  }
+
+  /**
+   * Checks whether decoding and again encoding an RSA public key results in the same encoding. This
+   * is a regression test. Failing this test implies that the encoding has changed. Such a failure
+   * does not need to be a bug, since several encoding for the same key are possible.
+   */
+  @Test
+  public void testEncodeDecodePublic() throws Exception {
+    KeyFactory kf = KeyFactory.getInstance("RSA");
+    byte[] encoded = TestUtil.hexToBytes(ENCODED_PUBLIC_KEY);
+    X509EncodedKeySpec spec = new X509EncodedKeySpec(encoded);
+    RSAPublicKey pub = (RSAPublicKey) kf.generatePublic(spec);
+    assertEquals(
+        "The test assumes that the public key is in X.509 format", "X.509", pub.getFormat());
+    assertEquals(ENCODED_PUBLIC_KEY, TestUtil.bytesToHex(pub.getEncoded()));
+  }
+
+  /**
+   * A list of problematic RSA public keys. Trying to parse invalid keys should result in an
+   * InvalidKeyException. OpenJdk throws other exceptions for the keys in this list. The list is
+   * based on tests done before Oracles Jan 2017 update, and hence may have shrunk in the meantime.
+   */
+  public static final String[] PROBLEMATIC_PUBLIC_KEY = {
+    // dropping value of sequence
+    "3013300d06092a864886f70d010101050003023000",
+    // dropping value of bit string
+    "3011300d06092a864886f70d01010105000300",
+    // length = 2**31 - 1
+    "30847fffffff300d06092a864886f70d010101050003818d0030818902818100"
+        + "ab9014dc47d44b6d260fc1fef9ab022042fd9566e9d7b60c54100cb6e1d4edc9"
+        + "8590467d0502c17fce69d00ac5efb40b2cb167d8a44ab93d73c4d0f109fb5a26"
+        + "c2f8823236ff517cf84412e173679cfae42e043b6fec81f9d984b562517e6feb"
+        + "e1f72295dbc3fdfc19d3240aa75515563f31dad83563f3a315acf9a0b351a23f"
+        + "0203010001",
+    "3081a330847fffffff06092a864886f70d010101050003818d00308189028181"
+        + "00ab9014dc47d44b6d260fc1fef9ab022042fd9566e9d7b60c54100cb6e1d4ed"
+        + "c98590467d0502c17fce69d00ac5efb40b2cb167d8a44ab93d73c4d0f109fb5a"
+        + "26c2f8823236ff517cf84412e173679cfae42e043b6fec81f9d984b562517e6f"
+        + "ebe1f72295dbc3fdfc19d3240aa75515563f31dad83563f3a315acf9a0b351a2"
+        + "3f0203010001",
+    "3081a3301106847fffffff2a864886f70d010101050003818d00308189028181"
+        + "00ab9014dc47d44b6d260fc1fef9ab022042fd9566e9d7b60c54100cb6e1d4ed"
+        + "c98590467d0502c17fce69d00ac5efb40b2cb167d8a44ab93d73c4d0f109fb5a"
+        + "26c2f8823236ff517cf84412e173679cfae42e043b6fec81f9d984b562517e6f"
+        + "ebe1f72295dbc3fdfc19d3240aa75515563f31dad83563f3a315acf9a0b351a2"
+        + "3f0203010001",
+    "3081a3301106092a864886f70d01010105847fffffff03818d00308189028181"
+        + "00ab9014dc47d44b6d260fc1fef9ab022042fd9566e9d7b60c54100cb6e1d4ed"
+        + "c98590467d0502c17fce69d00ac5efb40b2cb167d8a44ab93d73c4d0f109fb5a"
+        + "26c2f8823236ff517cf84412e173679cfae42e043b6fec81f9d984b562517e6f"
+        + "ebe1f72295dbc3fdfc19d3240aa75515563f31dad83563f3a315acf9a0b351a2"
+        + "3f0203010001",
+    "3081a2300d06092a864886f70d010101050003847fffffff0030818902818100"
+        + "ab9014dc47d44b6d260fc1fef9ab022042fd9566e9d7b60c54100cb6e1d4edc9"
+        + "8590467d0502c17fce69d00ac5efb40b2cb167d8a44ab93d73c4d0f109fb5a26"
+        + "c2f8823236ff517cf84412e173679cfae42e043b6fec81f9d984b562517e6feb"
+        + "e1f72295dbc3fdfc19d3240aa75515563f31dad83563f3a315acf9a0b351a23f"
+        + "0203010001",
+    "3081a1300d06092a864886f70d010101050003818f30847fffffff02818100ab"
+        + "9014dc47d44b6d260fc1fef9ab022042fd9566e9d7b60c54100cb6e1d4edc985"
+        + "90467d0502c17fce69d00ac5efb40b2cb167d8a44ab93d73c4d0f109fb5a26c2"
+        + "f8823236ff517cf84412e173679cfae42e043b6fec81f9d984b562517e6febe1"
+        + "f72295dbc3fdfc19d3240aa75515563f31dad83563f3a315acf9a0b351a23f02"
+        + "03010001",
+    "3081a1300d06092a864886f70d010101050003818f30818c02847fffffff00ab"
+        + "9014dc47d44b6d260fc1fef9ab022042fd9566e9d7b60c54100cb6e1d4edc985"
+        + "90467d0502c17fce69d00ac5efb40b2cb167d8a44ab93d73c4d0f109fb5a26c2"
+        + "f8823236ff517cf84412e173679cfae42e043b6fec81f9d984b562517e6febe1"
+        + "f72295dbc3fdfc19d3240aa75515563f31dad83563f3a315acf9a0b351a23f02"
+        + "03010001",
+    "3081a2300d06092a864886f70d010101050003819030818d02818100ab9014dc"
+        + "47d44b6d260fc1fef9ab022042fd9566e9d7b60c54100cb6e1d4edc98590467d"
+        + "0502c17fce69d00ac5efb40b2cb167d8a44ab93d73c4d0f109fb5a26c2f88232"
+        + "36ff517cf84412e173679cfae42e043b6fec81f9d984b562517e6febe1f72295"
+        + "dbc3fdfc19d3240aa75515563f31dad83563f3a315acf9a0b351a23f02847fff"
+        + "ffff010001",
+  };
+
+  // TODO(bleichen): This test is only needed as long as there are open issues.
+  @Test
+  public void testProblematicPublicKeyDecoding() throws Exception {
+    KeyFactory kf = KeyFactory.getInstance("RSA");
+    int cnt = 0;
+    for (String encoded : PROBLEMATIC_PUBLIC_KEY) {
+      X509EncodedKeySpec spec = new X509EncodedKeySpec(TestUtil.hexToBytes(encoded));
+      try {
+        RSAPublicKey unusedKey = (RSAPublicKey) kf.generatePublic(spec);
+      } catch (InvalidKeySpecException ex) {
+        // expected
+      } catch (Exception ex) {
+        System.out.println("generatePublic throws:" + ex.getMessage() + " for " + encoded);
+        cnt++;
+      }
+    }
+    assertEquals(0, cnt);
+  }
 }

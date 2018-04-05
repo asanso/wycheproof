@@ -1,6 +1,4 @@
 /**
- * @license
- * Copyright 2016 Google Inc. All rights reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,10 +11,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.google.security.wycheproof;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.math.BigInteger;
 import java.security.KeyFactory;
@@ -30,6 +28,8 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.RSAPublicKeySpec;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /** Tests RSA signature schemes. */
 // TODO(bleichen):
@@ -37,6 +37,7 @@ import org.junit.Test;
 // - So far only PKCS #1 signatures are tested. But RSA-PSS becomes more popular.
 // - document stuff
 // - Join other RSA tests
+@RunWith(JUnit4.class)
 public class RsaSignatureTest {
   static final RSAPublicKeySpec RSA_KEY1 =
       new RSAPublicKeySpec(
@@ -55,20 +56,22 @@ public class RsaSignatureTest {
    * various ways. I.e. while the generation of the false signature did require the private RSA key,
    * failing the test often is a sign that signatures can be forged. Such forgeries are much too
    * frequent. The following list is just an incomplete selection of past vulnerabilities:
+   *
    * <ul>
-   * <li> CVE-2006-4339: OpenSSL before 0.9.7 was vulnerable to signature forgeries. After the
-   * hasty patch OpenSSL still accepted at least 2^800 false 2048-bit signatures for each valid one.
-   * Even though unclear whether this was exploitable it was only fixed around 2014. 
-   * <li> CVE-2006-4340: Mozilla NSS before 3.11.3. 
-   * <li> CVE-2006-4790: GnuTLS before version 1.4.4.
-   * <li> CVE-2012-2388: StrongSwan
-   * <li> CVE-2016-1494: Python-RSA before version 3.3 failed to correclty verify RSA signatures.
-   * <li> BouncyCastle was vulnerable at least until version 1.47. The bug was silently fixed
-   * around 2012.
-   * <li> Berserk: http://www.intelsecurity.com/advanced-threat-research/berserk.html
-   * <li> Truncated comparison of hashes e.g.: http://wiibrew.org/wiki/Signing_bug
-   * <li> CVE-2016-5547: OpenJDK8 RSA signature's throws an OutOfMemoryError for some invalid
-   * signatures
+   *   <li>CVE-2006-4339: OpenSSL before 0.9.7 was vulnerable to signature forgeries. After the
+   *       hasty patch OpenSSL still accepted at least 2^800 false 2048-bit signatures for each
+   *       valid one. Even though unclear whether this was exploitable it was only fixed around
+   *       2014.
+   *   <li>CVE-2006-4340: Mozilla NSS before 3.11.3.
+   *   <li>CVE-2006-4790: GnuTLS before version 1.4.4.
+   *   <li>CVE-2012-2388: StrongSwan
+   *   <li>CVE-2016-1494: Python-RSA before version 3.3 failed to correclty verify RSA signatures.
+   *   <li>BouncyCastle was vulnerable at least until version 1.47. The bug was silently fixed
+   *       around 2012.
+   *   <li>Berserk: http://www.intelsecurity.com/advanced-threat-research/berserk.html
+   *   <li>Truncated comparison of hashes e.g.: http://wiibrew.org/wiki/Signing_bug
+   *   <li>CVE-2016-5547: OpenJDK8 RSA signature's throws an OutOfMemoryError for some invalid
+   *       signatures
    * </ul>
    */
   static final String[] SIGNATURES_KEY1 = {
@@ -1123,11 +1126,11 @@ public class RsaSignatureTest {
    * that verifying an invalid signature either leads to a return value False or will result in a
    * SignatureException. Verifying an RSA signature should not result in an RuntimeException, so
    * that reasonably implementated applications can be expected to catch and treat invalid
-   * signatures appropriately. While RuntimeExceptions may not be exploitable, they often indicate 
+   * signatures appropriately. While RuntimeExceptions may not be exploitable, they often indicate
    * an oversight in the implementation of the provider.
    * https://docs.oracle.com/javase/tutorial/essential/exceptions/runtime.html
    */
-  public void testVectors(RSAPublicKeySpec key, String algorithm, String[] testvectors)
+  private void testVectors(RSAPublicKeySpec key, String algorithm, String[] testvectors)
       throws Exception {
     byte[] message = "Test".getBytes("UTF-8");
     Signature verifier = Signature.getInstance(algorithm);

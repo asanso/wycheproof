@@ -1,6 +1,4 @@
 /**
- * @license
- * Copyright 2016 Google Inc. All rights reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,11 +11,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.google.security.wycheproof;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import com.google.security.wycheproof.WycheproofRunner.NoPresubmitTest;
 import com.google.security.wycheproof.WycheproofRunner.ProviderType;
 import com.google.security.wycheproof.WycheproofRunner.SlowTest;
 import java.math.BigInteger;
@@ -31,6 +31,8 @@ import java.util.Arrays;
 import javax.crypto.Cipher;
 import javax.crypto.spec.DHParameterSpec;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Testing DHIES.
@@ -49,6 +51,7 @@ import org.junit.Test;
 //   Cipher.DHIESWITHAES-CBC.
 // - So far only BouncyCastles is tesed because this is the only provider
 //   we use that implements DHIES.
+@RunWith(JUnit4.class)
 public class DhiesTest {
 
   // TODO(bleichen): This is the same as DhTest.java
@@ -173,5 +176,23 @@ public class DhiesTest {
   @Test
   public void testSemanticSecurityDhies() throws Exception {
     testNotEcb("DHIES");
+  }
+
+  /**
+   * Tests whether DHIESWithAES uses a reasonable encryption mode.
+   *
+   * <p>Problems found:
+   *
+   * <ul>
+   *   <li>CVE-2016-1000344 BouncyCaslte before v.1.56 used ECB mode as a default.
+   * </ul>
+   */
+  @Test
+  public void testSemanticSecurityDhiesWithAes() throws Exception {
+    testNotEcb("DHIESWithAES");
+  }
+  @Test
+  public void testSemanticSecurityDhiesWithDesede() throws Exception {
+    testNotEcb("DHIESWITHDESEDE");
   }
 }

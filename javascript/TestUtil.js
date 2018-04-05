@@ -31,7 +31,7 @@ goog.require('goog.json');
 wycheproof.TestUtil.readJsonTestVectorsFromFile = function(filename){
   var fileContent = goog.loadFileSync_(filename);
   assertTrue('Invalid file format (expected JSON)', goog.json.isValid(fileContent));
-  return goog.json.parse(fileContent);
+  return JSON.parse(fileContent);
 };
 
 

@@ -1,6 +1,4 @@
 /**
- * @license
- * Copyright 2016 Google Inc. All rights reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,10 +11,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.google.security.wycheproof;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.fail;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -27,6 +24,8 @@ import java.util.HashSet;
 import javax.crypto.Cipher;
 import javax.crypto.NoSuchPaddingException;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * RSA encryption tests
@@ -38,6 +37,7 @@ import org.junit.Test;
 // - plaintext too long
 // - ciphertext 0
 // - ciphertext == modulus timing attacks
+@RunWith(JUnit4.class)
 public class RsaEncryptionTest {
 
   /**
@@ -75,7 +75,7 @@ public class RsaEncryptionTest {
    *       condidtions.
    *   <li>Bardou, Focardi, Kawamoto, Simionato, Steel, Tsay "Efficient Padding Oracle Attacks on
    *       Cryptographic Hardware", Crypto 2012 The paper shows that small differences on what
-   *       information an attacker recieves can make a big difference on the number of chosen
+   *       information an attacker receives can make a big difference on the number of chosen
    *       message necessary for an attack.
    *   <li>Smart, "Errors matter: Breaking RSA-based PIN encryption with thirty ciphertext validity
    *       queries" RSA conference, 2010 This paper shows that padding oracle attacks can be
@@ -89,12 +89,12 @@ public class RsaEncryptionTest {
    * <p><b>What this test does not (yet) cover:</b>
    *
    * <ul>
-   *   <li> A previous version of one of the provider leaked the block type. (when was this fixed?)
-   *   <li> Some attacks require a large number of ciphertexts to be detected if random ciphertexts
+   *   <li>A previous version of one of the provider leaked the block type. (when was this fixed?)
+   *   <li>Some attacks require a large number of ciphertexts to be detected if random ciphertexts
    *       are used. Such problems require specifically crafted ciphertexts to run in a unit test.
    *       E.g. "Attacking RSA-based Sessions in SSL/TLS" by V. Klima, O. Pokorny, and T. Rosa:
    *       https://eprint.iacr.org/2003/052/
-   *   <li> Timing leakages because of differences in parsing the padding (e.g. CVE-2015-7827) Such
+   *   <li>Timing leakages because of differences in parsing the padding (e.g. CVE-2015-7827) Such
    *       differences are too small to be reliably detectable in unit tests.
    * </ul>
    */
@@ -156,6 +156,7 @@ public class RsaEncryptionTest {
 
   /**
    * Generates PKCS#1 invalid vectors
+   *
    * @param rsaKeyLength
    */
   private byte[][] generatePkcs1Vectors(int rsaKeyLength) {

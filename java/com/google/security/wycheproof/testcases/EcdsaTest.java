@@ -1,6 +1,4 @@
 /**
- * @license
- * Copyright 2016 Google Inc. All rights reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,10 +11,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.google.security.wycheproof;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.google.security.wycheproof.WycheproofRunner.ProviderType;
 import com.google.security.wycheproof.WycheproofRunner.SlowTest;
@@ -38,6 +37,8 @@ import java.security.spec.ECPoint;
 import java.security.spec.ECPublicKeySpec;
 import java.util.Arrays;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Tests ECDSA against invalid signatures.
@@ -52,6 +53,7 @@ import org.junit.Test;
 // TODO(bleichen):
 //   - CVE-2015-2730: Firefox failed to handle some signatures correctly because of incorrect
 //     point multiplication. (I don't have enough information here.)
+@RunWith(JUnit4.class)
 public class EcdsaTest {
   // ECDSA-Key1
   static final String MESSAGE = "Hello";
@@ -71,10 +73,10 @@ public class EcdsaTest {
   };
 
   /**
-   * The following test vectors contain a valid signature that use alternative BER encoding.
-   * Whether such signatures are accepted as valid or rejected depends on the implementation.
-   * Allowing alternative BER encodings is in many cases benign. However, there are cases where this
-   * kind of signature malleability was a problem. See for example
+   * The following test vectors contain a valid signature that use alternative BER encoding. Whether
+   * such signatures are accepted as valid or rejected depends on the implementation. Allowing
+   * alternative BER encodings is in many cases benign. However, there are cases where this kind of
+   * signature malleability was a problem. See for example
    * https://en.bitcoin.it/wiki/Transaction_Malleability
    */
   // NOTE(bleichen): The following test vectors were generated with some python code.
@@ -123,28 +125,32 @@ public class EcdsaTest {
   };
 
   /**
-   * Test vectors with invalid signatures. 
-   * The motivation for these test vectors are previously broken implementations. E.g.
+   * Test vectors with invalid signatures. The motivation for these test vectors are previously
+   * broken implementations. E.g.
+   *
    * <ul>
-   * <li> The implementation of DSA in gpg4browsers accepted signatures with r=1 and s=q as valid.
-   *     Similar bugs in ECDSA are thinkable, hence the test vectors contain a number of tests with
-   *     edge case integers.
-   * <li> CVE-2013-2944: strongSwan 5.0.4 accepts invalid ECDSA signatures when openssl is used.
-   *      (Not sure if the following interpretation is correct, because of missing details).
-   *      OpenSSLs error codes are easy to misinterpret. For many functions
-   *      the result can be 0 (verification failed), 1 (verification succeded)
-   *      or -1 (invalid format). A simple <code>if (result) { ... }</code> will be incorrect in
-   *      such situations. The test vectors below contain incorrectly encoded signatures.
+   *   <li>The implementation of DSA in gpg4browsers accepted signatures with r=1 and s=q as valid.
+   *       Similar bugs in ECDSA are thinkable, hence the test vectors contain a number of tests
+   *       with edge case integers.
+   *   <li>CVE-2013-2944: strongSwan 5.0.4 accepts invalid ECDSA signatures when openssl is used.
+   *       (Not sure if the following interpretation is correct, because of missing details).
+   *       OpenSSLs error codes are easy to misinterpret. For many functions the result can be 0
+   *       (verification failed), 1 (verification succeded) or -1 (invalid format). A simple <code>
+   *       if (result) { ... }</code> will be incorrect in such situations. The test vectors below
+   *       contain incorrectly encoded signatures.
    * </ul>
-   * <p> {@link java.security.Signature#verify(byte[])} should either return false or throw a
-   * SignatureException. Other behaviour such as throwing a RuntimeException might allow a denial 
-   * of service attack:
+   *
+   * <p>{@link java.security.Signature#verify(byte[])} should either return false or throw a
+   * SignatureException. Other behaviour such as throwing a RuntimeException might allow a denial of
+   * service attack:
+   *
    * <ul>
-   * <li> CVE-2016-5546: OpenJDK8 throwed an OutOfmemoryError on some signatures.
+   *   <li>CVE-2016-5546: OpenJDK8 throwed an OutOfmemoryError on some signatures.
    * </ul>
-   * Some of the test vectors were derived from a valid signature by corrupting the DER encoding.
-   * If providers accepts such modified signatures for legacy purpose, then these signatures
-   * should be moved to MODIFIED_SIGNATURES.
+   *
+   * Some of the test vectors were derived from a valid signature by corrupting the DER encoding. If
+   * providers accepts such modified signatures for legacy purpose, then these signatures should be
+   * moved to MODIFIED_SIGNATURES.
    */
   // NOTE(bleichen): The following test vectors were generated with some python code. New test
   // vectors should best be done by extending the python code.
@@ -467,8 +473,7 @@ public class EcdsaTest {
     "3046022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9ca"
         + "c2fc632551022100ffffffff0000000100000000000000000000000100000000"
         + "0000000000000000",
-    "3028022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9ca"
-        + "c2fc632551090380fe01",
+    "3028022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9ca" + "c2fc632551090380fe01",
     "3026022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632550020100",
     "3026022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632550020101",
     "3026022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc6325500201ff",
@@ -487,8 +492,7 @@ public class EcdsaTest {
     "3046022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9ca"
         + "c2fc632550022100ffffffff0000000100000000000000000000000100000000"
         + "0000000000000000",
-    "3028022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9ca"
-        + "c2fc632550090380fe01",
+    "3028022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9ca" + "c2fc632550090380fe01",
     "3026022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632552020100",
     "3026022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632552020101",
     "3026022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc6325520201ff",
@@ -507,8 +511,7 @@ public class EcdsaTest {
     "3046022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9ca"
         + "c2fc632552022100ffffffff0000000100000000000000000000000100000000"
         + "0000000000000000",
-    "3028022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9ca"
-        + "c2fc632552090380fe01",
+    "3028022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9ca" + "c2fc632552090380fe01",
     "3026022100ffffffff00000001000000000000000000000000ffffffffffffffffffffffff020100",
     "3026022100ffffffff00000001000000000000000000000000ffffffffffffffffffffffff020101",
     "3026022100ffffffff00000001000000000000000000000000ffffffffffffffffffffffff0201ff",
@@ -527,8 +530,7 @@ public class EcdsaTest {
     "3046022100ffffffff00000001000000000000000000000000ffffffffffffff"
         + "ffffffffff022100ffffffff0000000100000000000000000000000100000000"
         + "0000000000000000",
-    "3028022100ffffffff00000001000000000000000000000000ffffffffffffff"
-        + "ffffffffff090380fe01",
+    "3028022100ffffffff00000001000000000000000000000000ffffffffffffff" + "ffffffffff090380fe01",
     "3026022100ffffffff00000001000000000000000000000001000000000000000000000000020100",
     "3026022100ffffffff00000001000000000000000000000001000000000000000000000000020101",
     "3026022100ffffffff000000010000000000000000000000010000000000000000000000000201ff",
@@ -547,8 +549,7 @@ public class EcdsaTest {
     "3046022100ffffffff0000000100000000000000000000000100000000000000"
         + "0000000000022100ffffffff0000000100000000000000000000000100000000"
         + "0000000000000000",
-    "3028022100ffffffff0000000100000000000000000000000100000000000000"
-        + "0000000000090380fe01",
+    "3028022100ffffffff0000000100000000000000000000000100000000000000" + "0000000000090380fe01",
   };
 
   /**
@@ -556,7 +557,7 @@ public class EcdsaTest {
    * of algorithms. The Oracle standard use no hyphen in SHA256WithECDSA but uses a hyphen in the
    * message digest, i.e., SHA-256.
    */
-  public String getHashAlgorithm(String ecdsaAlgorithm) {
+  private String getHashAlgorithm(String ecdsaAlgorithm) {
     ecdsaAlgorithm = ecdsaAlgorithm.toUpperCase();
     int idx = ecdsaAlgorithm.indexOf("WITH");
     if (idx > 0) {
@@ -644,8 +645,13 @@ public class EcdsaTest {
   @Test
   public void testValidSignatures() throws Exception {
     testVectors(
-        VALID_SIGNATURES, publicKey1(), "Hello", "SHA256WithECDSA", "Valid ECDSA signature",
-        true, true);
+        VALID_SIGNATURES,
+        publicKey1(),
+        "Hello",
+        "SHA256WithECDSA",
+        "Valid ECDSA signature",
+        true,
+        true);
   }
 
   @Test
@@ -782,8 +788,14 @@ public class EcdsaTest {
     }
   }
 
-  @SlowTest(providers = {ProviderType.BOUNCY_CASTLE, ProviderType.CONSCRYPT, ProviderType.OPENJDK,
-    ProviderType.SPONGY_CASTLE})
+  @SlowTest(
+    providers = {
+      ProviderType.BOUNCY_CASTLE,
+      ProviderType.CONSCRYPT,
+      ProviderType.OPENJDK,
+      ProviderType.SPONGY_CASTLE
+    }
+  )
   @Test
   public void testBiasAll() throws Exception {
     testBias("SHA256WithECDSA", "secp256r1", EcUtil.getNistP256Params());
@@ -872,7 +884,7 @@ public class EcdsaTest {
       double average = total.doubleValue() / count;
       // Number of standard deviations that the average is away from
       // the expected value:
-      double sigmas = (expectedAverage - average) / expectedStdDev;
+      double sigmas = Math.abs(expectedAverage - average) / expectedStdDev;
       if (sigmas > maxSigma) {
         maxSigma = sigmas;
       }
@@ -894,8 +906,14 @@ public class EcdsaTest {
     }
   }
 
-  @SlowTest(providers = {ProviderType.BOUNCY_CASTLE, ProviderType.CONSCRYPT, ProviderType.OPENJDK,
-    ProviderType.SPONGY_CASTLE})
+  @SlowTest(
+    providers = {
+      ProviderType.BOUNCY_CASTLE,
+      ProviderType.CONSCRYPT,
+      ProviderType.OPENJDK,
+      ProviderType.SPONGY_CASTLE
+    }
+  )
   @Test
   public void testTimingAll() throws Exception {
     testTiming("SHA256WithECDSA", "secp256r1", EcUtil.getNistP256Params());

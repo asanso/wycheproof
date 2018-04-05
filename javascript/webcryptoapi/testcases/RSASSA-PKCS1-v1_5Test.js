@@ -34,6 +34,7 @@ var BigInteger = wycheproof.BigInteger;
 var RSASSA_PKCS1_SIGNATURE_VECTOR_FILE
     = '../../testvectors/rsa_signature_test.json';
 
+
 /**
  * Tests RSASSA-PKCS1-v1_5 signature implementation with a number of vectors.
  *
@@ -54,7 +55,7 @@ function testRsaSsaPkcs1Vectors() {
     }
     for (var j = 0; j < tg['tests'].length; j++) {
       var tc = tg['tests'][j];
-      var msg = BigInteger.fromHex(tc['message']).toArrayBuffer();
+      var msg = BigInteger.fromHex(tc['msg']).toArrayBuffer();
       var sig = TestUtil.hexToArrayBuffer(tc['sig']);
       var result = tc['result'];
       var tcId = tc['tcId'];

@@ -1,6 +1,4 @@
 /**
- * @license
- * Copyright 2016 Google Inc. All rights reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,19 +15,22 @@
 // TODO(bleichen):
 //   - So far only 16 byte tags are tested.
 //   - default values: BC uses a 64-bit default for tags.
-//     Tag size is not such a big problem as with AES-GCM, 
+//     Tag size is not such a big problem as with AES-GCM,
 //     since a 64 bit tag gives 64 bit strength for AES-EAX.
 
 package com.google.security.wycheproof;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /** AES-EAX tests */
+@RunWith(JUnit4.class)
 public class AesEaxTest {
 
   /** Test vectors */

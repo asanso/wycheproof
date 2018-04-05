@@ -199,7 +199,7 @@ function testEcdsaVectors() {
       var tc = tg['tests'][j];
       var tcId = tc['tcId'];
       var result = tc['result'];
-      var msg = TestUtil.hexToArrayBuffer(tc['message']);
+      var msg = TestUtil.hexToArrayBuffer(tc['msg']);
       var sig = TestUtil.hexToArrayBuffer(tc['sig']);
       var test = new EcdsaVerifyTestCase(
           tcId, keyData, hashAlg, msg, sig, result);

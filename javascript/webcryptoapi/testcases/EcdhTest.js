@@ -130,11 +130,16 @@ Ecdh.testKeyDerivation = function() {
           }
           resolve();
         }).catch(function(err) {
-          // don't expect any exception in signature verification
-          reject('Unexpected exception on test case ' + tc.id + ": " + err);
+          if (tc.result == 'valid') {
+            reject('Unexpected exception on test case ' + tc.id + ": " + err);
+          }
+          resolve();
         });
       }).catch(function(err) {
-        reject('Failed to import public key: ' + err);
+        if (tc.result == 'valid') {
+          reject('Failed to import public key: ' + err);
+        }
+        resolve();
       });
     }).catch(function(err) {
       reject('Failed to import private key: ' + err);

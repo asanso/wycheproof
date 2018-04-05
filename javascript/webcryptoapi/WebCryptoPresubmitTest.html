@@ -12,16 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // -->
+
 <!DOCTYPE html>
 <title>Unit Tests of Web Crypto API</title>
-<script src="../../external/com_google_javascript_closure_library/closure/goog/base.js"></script>
-<script src="../../../bazel-bin/E2EDeps.js"></script>
-
-<!-- This file is generated with depswriter:
-https://developers.google.com/closure/library/docs/depswriter
-It needs to be updated whenever there are changes. -->
-<script src="WebCryptoDeps.js"></script>
-
+<script src="../../../../javascript/closure/base.js"></script>
+<script src="../../webcrypto_test_deps-runfiles.js"></script>
 <script>
   goog.require('wycheproof.webcryptoapi');
   goog.require('wycheproof.webcryptoapi.AES-GCM');
@@ -32,6 +27,7 @@ It needs to be updated whenever there are changes. -->
 </script>
 <script>
 function setUpPage(){
-  wycheproof.webcryptoapi.setupAllTests();
+  wycheproof.webcryptoapi.setupPresubmitTests();
 }
 </script>
+

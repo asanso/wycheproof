@@ -43,7 +43,7 @@ check their libraries against a large number of known attacks, without having
 to spend years reading academic papers or become cryptographers themselves.
 
 For more information on the goals and strategies of Project Wycheproof, please
-check out our [doc](doc/).
+check out our [doc](g3doc/).
 
 ### Coverage
 
@@ -51,13 +51,13 @@ Project Wycheproof has tests for the most popular crypto algorithms, including
 
 - AES-EAX
 - AES-GCM
-- [DH](doc/dh.md)
+- [DH](g3doc/dh.md)
 - DHIES
-- [DSA](doc/dsa.md)
-- [ECDH](doc/ecdh.md)
+- [DSA](g3doc/dsa.md)
+- [ECDH](g3doc/ecdh.md)
 - ECDSA
 - ECIES
-- [RSA](doc/rsa.md)
+- [RSA](g3doc/rsa.md)
 
 The tests detect whether a library is vulnerable to many attacks, including
 
@@ -159,30 +159,8 @@ slow tests (which are annotated with @SlowTest).
 
 Most test targets are failing, and each failure might be a security issue. To
 learn more about what a failed test means, you might want to check out [our
-documentation](doc/bugs.md) or the comments on top of the corresponding test
+documentation](g3doc/bugs.md) or the comments on top of the corresponding test
 function and test class.
-
-- To test [Web Cryptography API](https://www.w3.org/TR/WebCryptoAPI/), you first need
-to compile [End-to-end](https://github.com/google/end-to-end) because our tests depend on it:
-
-```
-bazel build E2EDeps
-```
-
-Since Web Cryptography API works on web browsers, you then need to run a simple web server in your local machine by running, for example:
-
-```
-python -m SimpleHTTPServer
-```
-
-Now assuming that your source code folder's name is "wycheproof", open the web browsers
-that you want to test and point it to:
-
-```
-http://localhost:8000/bazel-wycheproof/javascript/webcryptoapi/WebCryptoTest.html
-```
-
-We have tested Chrome, Firefox, and Microsoft Edge.
 
 ### Hall of Bugs
 

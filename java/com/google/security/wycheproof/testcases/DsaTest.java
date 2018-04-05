@@ -1,6 +1,4 @@
 /**
- * @license
- * Copyright 2016 Google Inc. All rights reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -26,8 +24,11 @@
 //       signature multiple times, since this allows to get more accurate timings.
 package com.google.security.wycheproof;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import com.google.security.wycheproof.WycheproofRunner.NoPresubmitTest;
 import com.google.security.wycheproof.WycheproofRunner.ProviderType;
 import com.google.security.wycheproof.WycheproofRunner.SlowTest;
 import java.lang.management.ManagementFactory;
@@ -50,6 +51,8 @@ import java.security.spec.DSAPublicKeySpec;
 import java.util.Arrays;
 import javax.crypto.Cipher;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Tests DSA against invalid signatures. The motivation for this test is the DSA implementation in
@@ -57,6 +60,7 @@ import org.junit.Test;
  *
  * @author bleichen@google.com (Daniel Bleichenbacher)
  */
+@RunWith(JUnit4.class)
 public class DsaTest {
   static final String MESSAGE = "Hello";
 
@@ -115,13 +119,11 @@ public class DsaTest {
   };
 
   /**
-   * The following test vectos are derived from a valid signature by
-   * using alternative BER encoding as well as legacy formats.
-   * Accepting such signatures is in many cases benign. Hence the tests
-   * below will pass if such signatures are accepted as valid.
-   * The test vectors could be used to check for signature malleability.
-   * An example where this kind of signature malleability was a problem is
-   * https://en.bitcoin.it/wiki/Transaction_Malleability
+   * The following test vectos are derived from a valid signature by using alternative BER encoding
+   * as well as legacy formats. Accepting such signatures is in many cases benign. Hence the tests
+   * below will pass if such signatures are accepted as valid. The test vectors could be used to
+   * check for signature malleability. An example where this kind of signature malleability was a
+   * problem is https://en.bitcoin.it/wiki/Transaction_Malleability
    */
   static final String[] MODIFIED_SIGNATURES = {
     // BER:long form encoding of length
@@ -155,16 +157,15 @@ public class DsaTest {
   };
 
   /**
-   * The following test vectors are invalid DSA signatures.
-   * According to {@link java.security.Signature#verify(byte[])} verifying an invalid
-   * signature may either return false or throw a SignatureException.
-   * We expect that a correct implementation of DSA signatures satisfies this contract.
-   * Throwing a RuntimeException instead of a SignatureException could for example
-   * result in a denial of service attack.
+   * The following test vectors are invalid DSA signatures. According to {@link
+   * java.security.Signature#verify(byte[])} verifying an invalid signature may either return false
+   * or throw a SignatureException. We expect that a correct implementation of DSA signatures
+   * satisfies this contract. Throwing a RuntimeException instead of a SignatureException could for
+   * example result in a denial of service attack.
    *
    * <p>A list of problems that are caught by these signatures:
-   * <li> CVE-2016-5546: OpenJDK8 throwed java.lang.ArrayIndexOutOfBoundsException for
-   * some invalid DSA signatures.
+   * <li>CVE-2016-5546: OpenJDK8 throwed java.lang.ArrayIndexOutOfBoundsException for some invalid
+   *     DSA signatures.
    * </ul>
    */
   static final String[] INVALID_SIGNATURES = {
@@ -727,15 +728,25 @@ public class DsaTest {
   @Test
   public void testModifiedSignatures() throws Exception {
     testVectors(
-        MODIFIED_SIGNATURES, publicKey1, "Hello", "SHA224WithDSA", "Modified DSA signature",
-        false, true);
+        MODIFIED_SIGNATURES,
+        publicKey1,
+        "Hello",
+        "SHA224WithDSA",
+        "Modified DSA signature",
+        false,
+        true);
   }
 
   @Test
   public void testInvalidSignatures() throws Exception {
     testVectors(
-        INVALID_SIGNATURES, publicKey1, "Hello", "SHA224WithDSA", "Invalid DSA signature",
-        false, false);
+        INVALID_SIGNATURES,
+        publicKey1,
+        "Hello",
+        "SHA224WithDSA",
+        "Invalid DSA signature",
+        false,
+        false);
   }
 
   // Extract the integer r from a DSA signature.
@@ -881,9 +892,9 @@ public class DsaTest {
    * Tests the key generation for DSA.
    *
    * <p>Problems found:
+   *
    * <ul>
-   * <li> CVE-2016-1000343 BouncyCastle before v.1.56 always generated DSA keys with
-   * a 160-bit q.
+   *   <li>CVE-2016-1000343 BouncyCastle before v.1.56 always generated DSA keys with a 160-bit q.
    * </ul>
    */
   @SlowTest(providers = {ProviderType.BOUNCY_CASTLE, ProviderType.SPONGY_CASTLE})
@@ -891,6 +902,42 @@ public class DsaTest {
   public void testKeyGenerationAll() throws Exception {
     testKeyGeneration(1024);
     testKeyGeneration(2048);
+  }
+
+  /**
+   * Checks the default key size used for DSA key generation.
+   *
+   * <p>This test uses NIST SP 800-57 part1 revision 4
+   * http://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r4.pdf . Table 2 on page
+   * 53 recommends a minimal key length of 2048 bits for new keys used up to the year 2030.
+   *
+   * <p>While smaller keys may still be used for legacy cases, we think that such a choice should
+   * always be made by providing the desired key length during the initalization of the
+   * KeyPairGenerator. Unfortunately the JCE documentation is outdated.
+   * https://docs.oracle.com/javase/7/docs/api/java/security/KeyPairGenerator.html only requires
+   * that 1024 bits are supported.
+   */
+  @Test
+  public void testDefaultKeySize() throws Exception {
+    KeyPairGenerator keyGen = KeyPairGenerator.getInstance("DSA");
+    KeyPair keypair;
+    try {
+      keypair = keyGen.genKeyPair();
+    } catch (Exception ex) {
+      // Changing the default key size from 1024 bits to 2048 bits might be problematic for a
+      // provider, since SHA1WithDSA is the default algorithm.
+      // Hence, if a provider decides not to implement a default key size and requires that a user
+      // has to initialize the KeyPairGenerator then this should be acceptable behaviour.
+      System.out.println("Could not generate a key with default key size:" + ex.getMessage());
+      return;
+    }
+    DSAPublicKey pub = (DSAPublicKey) keypair.getPublic();
+    int keySizeInBits = pub.getParams().getP().bitLength();
+    System.out.println("testDefaultSize: keysize=" + keySizeInBits);
+    // checkKeyPair(keypair, keySizeInBits);
+    if (keySizeInBits < 2048) {
+      fail("DSA default key size too small:" + keySizeInBits);
+    }
   }
 
   /**
@@ -1058,13 +1105,15 @@ public class DsaTest {
    * From this we expect that 2^19 signatures and timings are sufficient to find the private key.
    *
    * <p>A list of problems caught by this test:
+   *
    * <ul>
-   * <li> CVE-2016-5548 OpenJDK8's DSA is vulnerable to timing attacks.
-   * <li> CVE-2016-1000341 BouncyCastle before v 1.56 is vulnernerable to timing attacks.
+   *   <li>CVE-2016-5548 OpenJDK8's DSA is vulnerable to timing attacks.
+   *   <li>CVE-2016-1000341 BouncyCastle before v 1.56 is vulnernerable to timing attacks.
    * </ul>
    */
-  @SlowTest(providers = {ProviderType.BOUNCY_CASTLE, ProviderType.OPENJDK,
-    ProviderType.SPONGY_CASTLE})
+  @SlowTest(
+    providers = {ProviderType.BOUNCY_CASTLE, ProviderType.OPENJDK, ProviderType.SPONGY_CASTLE}
+  )
   @SuppressWarnings("InsecureCryptoUsage")
   @Test
   public void testTiming() throws Exception {
@@ -1117,7 +1166,7 @@ public class DsaTest {
       double average = total / count;
       // Number of standard deviations that the average is away from
       // the expected value:
-      double sigmas = (expectedAverage - average) / expectedStdDev;
+      double sigmas = Math.abs(expectedAverage - average) / expectedStdDev;
       if (sigmas > maxSigmas) {
         maxSigmas = sigmas;
       }
